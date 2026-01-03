@@ -101,3 +101,58 @@ def check_out(
         "check_out_time": attendance.check_out,
         "work_minutes": attendance.work_hours
     }
+from typing import List
+from datetime import date
+from fastapi import Query
+
+
+# -------------------------
+# EMPLOYEE: VIEW OWN ATTENDANCE
+# -------------------------
+@router.get("/my-records")
+def get_my_attendance(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
+):
+    employee = db.query(Employee).filter(
+        Employee.user_id == current_user.id
+    ).first()
+
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee profile not found")
+
+    query = db.query(Attendance).filter(
+        Attendance.employee_id == employee.id
+    )
+
+    if start_date:
+        query = query.filter(Attendance.attendance_date >= start_date)
+    if end_date:
+        query = query.filter(Attendance.attendance_date <= end_date)
+
+    return query.order_by(Attendance.attendance_date.desc()).all()
+
+
+# -------------------------
+# ADMIN: VIEW ALL ATTENDANCE
+# -------------------------
+@router.get("/all")
+def get_all_attendance(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    query = db.query(Attendance)
+
+    if start_date:
+        query = query.filter(Attendance.attendance_date >= start_date)
+    if end_date:
+        query = query.filter(Attendance.attendance_date <= end_date)
+
+    return query.order_by(Attendance.attendance_date.desc()).all()
