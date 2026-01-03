@@ -17,9 +17,6 @@ def get_db():
         db.close()
 
 
-# -------------------------
-# GET MY PROFILE (AUTO-CREATE)
-# -------------------------
 @router.get("/me")
 def get_my_profile(
     db: Session = Depends(get_db),
@@ -29,11 +26,11 @@ def get_my_profile(
         Employee.user_id == current_user.id
     ).first()
 
-    # Auto-create employee profile if not exists
+    # ✅ AUTO-CREATE EMPLOYEE PROFILE (REQUIRED FIELDS)
     if not employee:
         employee = Employee(
             user_id=current_user.id,
-            full_name=current_user.email.split("@")[0]
+            full_name=current_user.email.split("@")[0]  # REQUIRED FIELD
         )
         db.add(employee)
         db.commit()
@@ -42,54 +39,9 @@ def get_my_profile(
     return employee
 
 
-# -------------------------
-# UPDATE MY PROFILE (EMPLOYEE)
-# -------------------------
-@router.put("/me")
-def update_my_profile(
-    full_name: str | None = None,
-    department: str | None = None,
-    designation: str | None = None,
-    phone: str | None = None,
-    address: str | None = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    employee = db.query(Employee).filter(
-        Employee.user_id == current_user.id
-    ).first()
-
-    if not employee:
-        raise HTTPException(status_code=404, detail="Employee profile not found")
-
-    if full_name is not None:
-        employee.full_name = full_name
-    if department is not None:
-        employee.department = department
-    if designation is not None:
-        employee.designation = designation
-    if phone is not None:
-        employee.phone = phone
-    if address is not None:
-        employee.address = address
-
-    db.commit()
-    db.refresh(employee)
-
-    return employee
-
-
-# -------------------------
-# ADMIN: UPDATE ANY EMPLOYEE
-# -------------------------
-@router.put("/{employee_id}")
-def admin_update_employee(
+@router.get("/{employee_id}")
+def get_employee_by_id(
     employee_id: int,
-    full_name: str | None = None,
-    department: str | None = None,
-    designation: str | None = None,
-    phone: str | None = None,
-    address: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -102,19 +54,5 @@ def admin_update_employee(
 
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
-
-    if full_name is not None:
-        employee.full_name = full_name
-    if department is not None:
-        employee.department = department
-    if designation is not None:
-        employee.designation = designation
-    if phone is not None:
-        employee.phone = phone
-    if address is not None:
-        employee.address = address
-
-    db.commit()
-    db.refresh(employee)
 
     return employee
