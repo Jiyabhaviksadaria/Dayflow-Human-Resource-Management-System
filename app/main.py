@@ -8,6 +8,7 @@ from app.models import user, employee
 from app.routes.employee import router as employee_router
 from app.auth.dependencies import get_current_user
 from app.models.user import User
+from app.models import user, employee, attendance
 
 app = FastAPI(title="Dayflow HRMS")
 
