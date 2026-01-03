@@ -156,3 +156,23 @@ def get_all_attendance(
         query = query.filter(Attendance.attendance_date <= end_date)
 
     return query.order_by(Attendance.attendance_date.desc()).all()
+from datetime import date
+
+
+@router.get("/me")
+def get_my_attendance(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    employee = db.query(Employee).filter(
+        Employee.user_id == current_user.id
+    ).first()
+
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee profile not found")
+
+    attendance = db.query(Attendance).filter(
+        Attendance.employee_id == employee.id
+    ).all()
+
+    return attendance
