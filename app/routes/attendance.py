@@ -58,3 +58,46 @@ def check_in(
         "message": "Check-in successful",
         "check_in_time": attendance.check_in
     }
+@router.post("/check-out")
+def check_out(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    employee = db.query(Employee).filter(
+        Employee.user_id == current_user.id
+    ).first()
+
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee profile not found")
+
+    today = date.today()
+
+    attendance = db.query(Attendance).filter(
+        Attendance.employee_id == employee.id,
+        Attendance.attendance_date == today
+    ).first()
+
+    if not attendance or not attendance.check_in:
+        raise HTTPException(status_code=400, detail="Check-in not found for today")
+
+    if attendance.check_out:
+        raise HTTPException(status_code=400, detail="Already checked out today")
+
+    check_out_time = datetime.now().time()
+    attendance.check_out = check_out_time
+
+    # Calculate work hours in minutes
+    check_in_dt = datetime.combine(today, attendance.check_in)
+    check_out_dt = datetime.combine(today, check_out_time)
+
+    work_minutes = int((check_out_dt - check_in_dt).total_seconds() / 60)
+    attendance.work_hours = work_minutes
+
+    db.commit()
+    db.refresh(attendance)
+
+    return {
+        "message": "Check-out successful",
+        "check_out_time": attendance.check_out,
+        "work_minutes": attendance.work_hours
+    }
