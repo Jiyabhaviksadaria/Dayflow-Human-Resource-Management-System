@@ -176,3 +176,24 @@ def get_my_attendance(
     ).all()
 
     return attendance
+from datetime import date
+from typing import Optional
+
+
+@router.get("/all")
+def get_all_attendance(
+    attendance_date: Optional[date] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # 🔐 Admin-only access
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    query = db.query(Attendance)
+
+    if attendance_date:
+        query = query.filter(Attendance.date == attendance_date)
+
+    attendance = query.all()
+    return attendance
