@@ -76,3 +76,52 @@ def generate_payroll(
         "salary_amount": salary_amount,
         "status": payroll.status
     }
+from typing import Optional
+from fastapi import Query
+
+
+@router.get("/me")
+def get_my_payroll(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    month: Optional[int] = Query(None),
+    year: Optional[int] = Query(None),
+):
+    employee = db.query(Employee).filter(
+        Employee.user_id == current_user.id
+    ).first()
+
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee profile not found")
+
+    query = db.query(Payroll).filter(
+        Payroll.employee_id == employee.id
+    )
+
+    if month:
+        query = query.filter(Payroll.month == month)
+    if year:
+        query = query.filter(Payroll.year == year)
+
+    return query.order_by(Payroll.year.desc(), Payroll.month.desc()).all()
+@router.get("/all")
+def get_all_payrolls(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    employee_id: Optional[int] = Query(None),
+    month: Optional[int] = Query(None),
+    year: Optional[int] = Query(None),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    query = db.query(Payroll)
+
+    if employee_id:
+        query = query.filter(Payroll.employee_id == employee_id)
+    if month:
+        query = query.filter(Payroll.month == month)
+    if year:
+        query = query.filter(Payroll.year == year)
+
+    return query.order_by(Payroll.year.desc(), Payroll.month.desc()).all()

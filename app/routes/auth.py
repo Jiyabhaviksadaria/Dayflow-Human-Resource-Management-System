@@ -7,8 +7,6 @@ from app.utils.security import hash_password, verify_password
 from app.utils.token import create_access_token
 from app.schemas.auth import SignupRequest, LoginRequest
 
-# Create tables
-Base.metadata.create_all(bind=engine)
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
