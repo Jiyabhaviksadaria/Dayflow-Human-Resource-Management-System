@@ -58,7 +58,7 @@ def login(
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token = create_access_token(
-        {"user_id": user.id, "role": user.role}
+        {"sub": str(user.id), "role": user.role}
     )
 
     return {

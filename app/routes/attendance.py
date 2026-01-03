@@ -1,6 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from datetime import datetime, date
+from typing import Optional
 
 from app.database.db import SessionLocal
 from app.models.attendance import Attendance
@@ -11,6 +13,9 @@ from app.auth.dependencies import get_current_user
 router = APIRouter(prefix="/attendance", tags=["Attendance"])
 
 
+# -------------------------
+# DATABASE DEPENDENCY
+# -------------------------
 def get_db():
     db = SessionLocal()
     try:
@@ -19,12 +24,14 @@ def get_db():
         db.close()
 
 
+# -------------------------
+# CHECK-IN
+# -------------------------
 @router.post("/check-in")
 def check_in(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Get employee
     employee = db.query(Employee).filter(
         Employee.user_id == current_user.id
     ).first()
@@ -34,16 +41,14 @@ def check_in(
 
     today = date.today()
 
-    # Check if already checked in today
     existing = db.query(Attendance).filter(
         Attendance.employee_id == employee.id,
         Attendance.attendance_date == today
     ).first()
 
-    if existing and existing.check_in is not None:
+    if existing and existing.check_in:
         raise HTTPException(status_code=400, detail="Already checked in today")
 
-    # Create attendance record
     attendance = Attendance(
         employee_id=employee.id,
         attendance_date=today,
@@ -58,6 +63,11 @@ def check_in(
         "message": "Check-in successful",
         "check_in_time": attendance.check_in
     }
+
+
+# -------------------------
+# CHECK-OUT
+# -------------------------
 @router.post("/check-out")
 def check_out(
     db: Session = Depends(get_db),
@@ -83,15 +93,14 @@ def check_out(
     if attendance.check_out:
         raise HTTPException(status_code=400, detail="Already checked out today")
 
-    check_out_time = datetime.now().time()
-    attendance.check_out = check_out_time
+    attendance.check_out = datetime.now().time()
 
-    # Calculate work hours in minutes
     check_in_dt = datetime.combine(today, attendance.check_in)
-    check_out_dt = datetime.combine(today, check_out_time)
+    check_out_dt = datetime.combine(today, attendance.check_out)
 
-    work_minutes = int((check_out_dt - check_in_dt).total_seconds() / 60)
-    attendance.work_hours = work_minutes
+    attendance.work_hours = int(
+        (check_out_dt - check_in_dt).total_seconds() / 60
+    )
 
     db.commit()
     db.refresh(attendance)
@@ -101,64 +110,11 @@ def check_out(
         "check_out_time": attendance.check_out,
         "work_minutes": attendance.work_hours
     }
-from typing import List
-from datetime import date
-from fastapi import Query
 
 
 # -------------------------
-# EMPLOYEE: VIEW OWN ATTENDANCE
+# EMPLOYEE: MY ATTENDANCE
 # -------------------------
-@router.get("/my-records")
-def get_my_attendance(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    start_date: date | None = Query(None),
-    end_date: date | None = Query(None),
-):
-    employee = db.query(Employee).filter(
-        Employee.user_id == current_user.id
-    ).first()
-
-    if not employee:
-        raise HTTPException(status_code=404, detail="Employee profile not found")
-
-    query = db.query(Attendance).filter(
-        Attendance.employee_id == employee.id
-    )
-
-    if start_date:
-        query = query.filter(Attendance.attendance_date >= start_date)
-    if end_date:
-        query = query.filter(Attendance.attendance_date <= end_date)
-
-    return query.order_by(Attendance.attendance_date.desc()).all()
-
-
-# -------------------------
-# ADMIN: VIEW ALL ATTENDANCE
-# -------------------------
-@router.get("/all")
-def get_all_attendance(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    start_date: date | None = Query(None),
-    end_date: date | None = Query(None),
-):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Access denied")
-
-    query = db.query(Attendance)
-
-    if start_date:
-        query = query.filter(Attendance.attendance_date >= start_date)
-    if end_date:
-        query = query.filter(Attendance.attendance_date <= end_date)
-
-    return query.order_by(Attendance.attendance_date.desc()).all()
-from datetime import date
-
-
 @router.get("/me")
 def get_my_attendance(
     db: Session = Depends(get_db),
@@ -171,29 +127,69 @@ def get_my_attendance(
     if not employee:
         raise HTTPException(status_code=404, detail="Employee profile not found")
 
-    attendance = db.query(Attendance).filter(
+    return db.query(Attendance).filter(
         Attendance.employee_id == employee.id
-    ).all()
-
-    return attendance
-from datetime import date
-from typing import Optional
+    ).order_by(Attendance.attendance_date.desc()).all()
 
 
+# -------------------------
+# ADMIN: ALL ATTENDANCE
+# -------------------------
 @router.get("/all")
 def get_all_attendance(
-    attendance_date: Optional[date] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
 ):
-    # 🔐 Admin-only access
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Access denied")
 
     query = db.query(Attendance)
 
-    if attendance_date:
-        query = query.filter(Attendance.date == attendance_date)
+    if start_date:
+        query = query.filter(Attendance.attendance_date >= start_date)
+    if end_date:
+        query = query.filter(Attendance.attendance_date <= end_date)
 
-    attendance = query.all()
-    return attendance
+    return query.order_by(Attendance.attendance_date.desc()).all()
+
+
+# -------------------------
+# ATTENDANCE SUMMARY
+# -------------------------
+@router.get("/me/summary")
+def get_my_attendance_summary(
+    month: int,
+    year: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    employee = db.query(Employee).filter(
+        Employee.user_id == current_user.id
+    ).first()
+
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee profile not found")
+
+    records = db.query(Attendance).filter(
+        Attendance.employee_id == employee.id,
+        func.strftime("%m", Attendance.attendance_date) == f"{month:02d}",
+        func.strftime("%Y", Attendance.attendance_date) == str(year)
+    ).all()
+
+    total_days = len(records)
+
+    # ✅ PRESENT = check_in exists
+    present_days = len([r for r in records if r.check_in is not None])
+
+    return {
+        "month": month,
+        "year": year,
+        "total_working_days": total_days,
+        "present_days": present_days,
+        "attendance_percentage": (
+            round((present_days / total_days) * 100, 2)
+            if total_days > 0 else 0
+        )
+    }
