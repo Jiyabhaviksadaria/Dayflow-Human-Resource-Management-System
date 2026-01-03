@@ -9,10 +9,12 @@ from app.routes.employee import router as employee_router
 from app.auth.dependencies import get_current_user
 from app.models.user import User
 from app.models import user, employee, attendance
-
+from app.routes.attendance import router as attendance_router
 app = FastAPI(title="Dayflow HRMS")
 
 app.include_router(employee_router)
+app.include_router(attendance_router)
+
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
