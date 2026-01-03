@@ -58,3 +58,67 @@ def apply_leave(
         "leave_id": leave.id,
         "status": leave.status
     }
+@router.put("/{leave_id}/approve")
+def approve_leave(
+    leave_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    leave = db.query(LeaveRequest).filter(
+        LeaveRequest.id == leave_id
+    ).first()
+
+    if not leave:
+        raise HTTPException(status_code=404, detail="Leave request not found")
+
+    if leave.status != "Pending":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Leave already {leave.status}"
+        )
+
+    leave.status = "Approved"
+    db.commit()
+    db.refresh(leave)
+
+    return {
+        "message": "Leave approved",
+        "leave_id": leave.id,
+        "status": leave.status
+    }
+
+
+@router.put("/{leave_id}/reject")
+def reject_leave(
+    leave_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    leave = db.query(LeaveRequest).filter(
+        LeaveRequest.id == leave_id
+    ).first()
+
+    if not leave:
+        raise HTTPException(status_code=404, detail="Leave request not found")
+
+    if leave.status != "Pending":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Leave already {leave.status}"
+        )
+
+    leave.status = "Rejected"
+    db.commit()
+    db.refresh(leave)
+
+    return {
+        "message": "Leave rejected",
+        "leave_id": leave.id,
+        "status": leave.status
+    }
